@@ -178,8 +178,8 @@ class DualModeUploaderApp:
             return
             
         threading.Thread(target=self.run_upload_and_read, args=(sketch_path,), daemon=True).start()
-
-    def run_upload_and_read(self, sketch_path):
+        
+def run_upload_and_read(self, sketch_path):
         """The main logic for compiling, uploading, and reading a value."""
         port = self.port_var.get()
         baud_rate = self.baud_rate_var.get()
@@ -191,12 +191,12 @@ class DualModeUploaderApp:
         self.quick_upload_button.config(state=tk.DISABLED)
         self.custom_upload_button.config(state=tk.DISABLED)
         
-        # The rest of this function is identical to the previous version's run_upload_and_read
         # --- 1. Compile ---
         self.log(f"Starting compile for {Path(sketch_path).name} with FQBN '{DEFAULT_FQBN}'...")
         compile_cmd = [str(ARDUINO_CLI_PATH), "compile", "--fqbn", DEFAULT_FQBN, sketch_path]
         upload_details = ""
         try:
+            # ADDED creationflags TO HIDE THE WINDOW
             subprocess.run(compile_cmd, capture_output=True, text=True, check=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW)
             self.log("Compile successful.")
             upload_details += f"Compile OK.\n"
@@ -213,6 +213,7 @@ class DualModeUploaderApp:
         upload_cmd = [str(ARDUINO_CLI_PATH), "upload", "-p", port, "--fqbn", DEFAULT_FQBN, sketch_path]
         upload_ok = False
         try:
+            # ADDED creationflags TO HIDE THE WINDOW
             subprocess.run(upload_cmd, capture_output=True, text=True, check=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW)
             self.log("Upload successful!")
             upload_details += f"Upload OK.\n"
@@ -221,6 +222,7 @@ class DualModeUploaderApp:
             self.log("Upload failed. Trying with old bootloader...")
             upload_cmd_old = [str(ARDUINO_CLI_PATH), "upload", "-p", port, "--fqbn", f"{DEFAULT_FQBN}:cpu=atmega328old", sketch_path]
             try:
+                # ADDED creationflags TO HIDE THE WINDOW
                 subprocess.run(upload_cmd_old, capture_output=True, text=True, check=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW)
                 self.log("Upload successful with old bootloader!")
                 upload_details += f"Upload OK (old bootloader).\n"
