@@ -78,38 +78,44 @@ class DualModeUploaderApp:
         self.master = master
         master.title("Dual-Mode Arduino Uploader")
         master.geometry("750x650")
-        
+
         # --- Load Settings ---
         self.settings = load_settings()
         self.default_sketch_path_var = tk.StringVar(value=self.settings.get("default_sketch_path", "Default sketch not set"))
         self.custom_sketch_path_var = tk.StringVar(value=self.settings.get("custom_sketch_path", ""))
         self.baud_rate_var = tk.StringVar(value=self.settings.get("baud_rate", "9600"))
         self.port_var = tk.StringVar(value=self.settings.get("port", ""))
+        self.fqbn_var = tk.StringVar(value=self.settings.get("fqbn", "arduino:avr:nano"))
 
         # --- GUI Frames ---
         quick_frame = tk.LabelFrame(master, text="1. Quick Upload (for Color Sensor)", padx=10, pady=10, font=("Arial", 10, "bold"))
         quick_frame.pack(fill=tk.X, padx=10, pady=10)
-        
+
         custom_frame = tk.LabelFrame(master, text="2. Custom Upload (for any other sketch)", padx=10, pady=10)
         custom_frame.pack(fill=tk.X, padx=10, pady=5)
-        
+
         log_frame = tk.LabelFrame(master, text="Upload Log", padx=10, pady=10)
         log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(5, 10))
 
         # --- Quick Upload Widgets ---
         tk.Label(quick_frame, text="Default Sketch Path:").grid(row=0, column=0, sticky="w")
         tk.Label(quick_frame, textvariable=self.default_sketch_path_var, fg="blue", wraplength=500, justify=tk.LEFT).grid(row=1, column=0, columnspan=3, sticky="w")
-        
+
         tk.Button(quick_frame, text="Set/Change Default Sketch", command=self.set_default_sketch).grid(row=1, column=3, padx=10, sticky="e")
 
         tk.Label(quick_frame, text="COM Port:").grid(row=2, column=0, sticky="w", pady=(10, 0))
         self.port_menu = tk.OptionMenu(quick_frame, self.port_var, "No ports")
         self.port_menu.grid(row=3, column=0, sticky="ew")
-        
+
+        tk.Label(quick_frame, text="Baud Rate:").grid(row=3, column=1, sticky="w", padx=10, pady=(10, 0))
+        tk.Entry(quick_frame, textvariable=self.baud_rate_var).grid(row=4, column=1, sticky="ew", padx=10)
+        tk.Button(quick_frame, text="Refresh Ports", command=self.refresh_ports).grid(row=4, column=2, sticky="w")
+        self.port_menu.grid(row=4, column=0, sticky="ew")  # Mover esto a la fila 4
+
         tk.Label(quick_frame, text="Baud Rate:").grid(row=2, column=1, sticky="w", padx=10, pady=(10, 0))
         tk.Entry(quick_frame, textvariable=self.baud_rate_var).grid(row=3, column=1, sticky="ew", padx=10)
         tk.Button(quick_frame, text="Refresh Ports", command=self.refresh_ports).grid(row=3, column=2, sticky="w")
-        
+
         self.quick_upload_button = tk.Button(quick_frame, text="Upload Color Sensor Sketch", command=lambda: self.start_upload_thread(use_default=True), bg="#4CAF50", fg="white", font=("Arial", 10, "bold"), height=2)
         self.quick_upload_button.grid(row=4, column=0, columnspan=4, pady=15, sticky="ew")
 
@@ -119,11 +125,11 @@ class DualModeUploaderApp:
         tk.Button(custom_frame, text="Browse...", command=self.select_custom_sketch).grid(row=1, column=1, padx=5)
         self.custom_upload_button = tk.Button(custom_frame, text="Upload Selected Sketch", command=lambda: self.start_upload_thread(use_default=False))
         self.custom_upload_button.grid(row=2, column=0, columnspan=2, pady=10, sticky="ew")
-        
+
         # --- Log Frame ---
         self.log_area = scrolledtext.ScrolledText(log_frame, wrap=tk.WORD, height=10)
         self.log_area.pack(fill=tk.BOTH, expand=True)
-        
+
         self.refresh_ports()
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
@@ -133,6 +139,7 @@ class DualModeUploaderApp:
         self.settings["custom_sketch_path"] = self.custom_sketch_path_var.get()
         self.settings["baud_rate"] = self.baud_rate_var.get()
         self.settings["port"] = self.port_var.get()
+        self.settings["fqbn"] = self.fqbn_var.get()
         save_settings(self.settings)
         self.master.destroy()
 
@@ -178,87 +185,202 @@ class DualModeUploaderApp:
             return
             
         threading.Thread(target=self.run_upload_and_read, args=(sketch_path,), daemon=True).start()
-        
-def run_upload_and_read(self, sketch_path):
-        """The main logic for compiling, uploading, and reading a value."""
+
+    def run_upload_and_read(self, sketch_path):
+        """La lógica principal para compilar, subir y leer un valor."""
         port = self.port_var.get()
         baud_rate = self.baud_rate_var.get()
+        sketch_name = Path(sketch_path).name
 
+        # --- 0. Validación ---
         if "No ports" in port or not baud_rate.isdigit():
-            messagebox.showerror("Error", "Port and Baud Rate must be set correctly.")
+            self.log("ERROR: El puerto y el Baud Rate deben estar configurados.")
+            messagebox.showerror("Error", "El puerto y el Baud Rate deben estar configurados correctamente.")
             return
 
+        # Deshabilitar botones
         self.quick_upload_button.config(state=tk.DISABLED)
         self.custom_upload_button.config(state=tk.DISABLED)
-        
-        # --- 1. Compile ---
-        self.log(f"Starting compile for {Path(sketch_path).name} with FQBN '{DEFAULT_FQBN}'...")
-        compile_cmd = [str(ARDUINO_CLI_PATH), "compile", "--fqbn", DEFAULT_FQBN, sketch_path]
-        upload_details = ""
-        try:
-            # ADDED creationflags TO HIDE THE WINDOW
-            subprocess.run(compile_cmd, capture_output=True, text=True, check=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW)
-            self.log("Compile successful.")
-            upload_details += f"Compile OK.\n"
-        except subprocess.CalledProcessError as e:
-            error_msg = f"ERROR: Compile failed!\n{e.stderr or e.stdout}"
-            self.log(error_msg)
-            log_to_csv([time.strftime('%Y-%m-%d %H:%M:%S'), port, Path(sketch_path).name, "FAIL", "N/A", error_msg])
-            self.quick_upload_button.config(state=tk.NORMAL)
-            self.custom_upload_button.config(state=tk.NORMAL)
-            return
 
-        # --- 2. Upload ---
-        self.log(f"Starting upload to {port}...")
-        upload_cmd = [str(ARDUINO_CLI_PATH), "upload", "-p", port, "--fqbn", DEFAULT_FQBN, sketch_path]
+        # --- 1. Compilar ---
+        # Llama a la función que usa Popen (no bloqueante)
+        compile_ok, compile_details = self._compile_sketch(sketch_path)
+
         upload_ok = False
-        try:
-            # ADDED creationflags TO HIDE THE WINDOW
-            subprocess.run(upload_cmd, capture_output=True, text=True, check=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW)
-            self.log("Upload successful!")
-            upload_details += f"Upload OK.\n"
-            upload_ok = True
-        except subprocess.CalledProcessError:
-            self.log("Upload failed. Trying with old bootloader...")
-            upload_cmd_old = [str(ARDUINO_CLI_PATH), "upload", "-p", port, "--fqbn", f"{DEFAULT_FQBN}:cpu=atmega328old", sketch_path]
-            try:
-                # ADDED creationflags TO HIDE THE WINDOW
-                subprocess.run(upload_cmd_old, capture_output=True, text=True, check=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW)
-                self.log("Upload successful with old bootloader!")
-                upload_details += f"Upload OK (old bootloader).\n"
-                upload_ok = True
-            except subprocess.CalledProcessError as e2:
-                error_msg = f"ERROR: Upload failed on all attempts!\n{e2.stderr or e2.stdout}"
-                self.log(error_msg)
-                upload_details += error_msg
-
-        # --- 3. Read Value ---
+        upload_details = "N/A"
         read_value = "N/A"
+
+        # --- 2. Subir (solo si la compilación fue exitosa) ---
+        if compile_ok:
+            # Llama a la función que usa Popen (no bloqueante)
+            upload_ok, upload_details = self._upload_sketch(sketch_path, port)
+        else:
+            upload_details = "Carga omitida debido a fallo de compilación."
+
+        # --- 3. Leer Valor (solo si la subida fue exitosa) ---
         if upload_ok:
-            self.log(f"Attempting to read from {port} at {baud_rate} baud...")
-            try:
-                with serial.Serial(port, int(baud_rate), timeout=2.0) as sp:
-                    time.sleep(2)
-                    sp.reset_input_buffer()
-                    line = sp.readline().decode('utf-8').strip()
-                    if line:
-                        read_value = line
-                        self.log(f"Data received: {read_value}")
-                    else:
-                        self.log("Warning: No data received from serial port.")
-            except Exception as e:
-                self.log(f"ERROR: Could not read from serial port: {e}")
-                read_value = "ERROR"
-        
-        # --- 4. Log to CSV ---
+            read_value = self._read_from_serial(port, baud_rate)
+
+        # --- 4. Registrar en CSV ---
         log_to_csv([
-            time.strftime('%Y-%m-%d %H:%M:%S'), port, Path(sketch_path).name,
+            time.strftime('%Y-%m-%d %H:%M:%S'), port, sketch_name,
             "SUCCESS" if upload_ok else "FAIL", read_value,
-            upload_details.replace("\r", " ").replace("\n", " ")
+            f"{compile_details} | {upload_details}".replace("\r", " ").replace("\n", " ")
         ])
-        self.log(f"Process finished. Results logged to {LOG_CSV_PATH.name}")
+
+        self.log(f"Proceso finalizado. Resultados registrados en {LOG_CSV_PATH.name}")
+
+        # Habilitar botones
         self.quick_upload_button.config(state=tk.NORMAL)
         self.custom_upload_button.config(state=tk.NORMAL)
+
+    def _compile_sketch(self, sketch_path):
+        """Compiles the sketch and returns status and details."""
+        sketch_name = Path(sketch_path).name
+        fqbn = self.fqbn_var.get()
+        compile_cmd = [str(ARDUINO_CLI_PATH), "compile", "--fqbn", fqbn, sketch_path]
+
+        success = self._run_command_realtime(compile_cmd, log_prefix=f"Compiling {sketch_name}")
+
+        if success:
+            self.log("Compile successful.")
+            return True, "Compile OK."
+        else:
+            self.log("ERROR: Compile failed! Check logs above for details.")
+            return False, "Compile FAIL."
+
+    def _upload_sketch(self, sketch_path, port):
+        """Uploads the sketch, trying both new and old bootloaders."""
+        fqbn = self.fqbn_var.get()
+        upload_cmd = [str(ARDUINO_CLI_PATH), "upload", "-p", port, "--fqbn", fqbn, sketch_path]
+
+        # Try with standard bootloader
+        success = self._run_command_realtime(upload_cmd, log_prefix=f"Uploading to {port}")
+
+        if success:
+            self.log("Upload successful!")
+            return True, "Upload OK."
+
+        # If it failed, try with the old bootloader
+        self.log("Upload failed. Trying with old bootloader...")
+        fqbn_old = f"{fqbn}:cpu=atmega328old"
+        upload_cmd_old = [str(ARDUINO_CLI_PATH), "upload", "-p", port, "--fqbn", fqbn_old, sketch_path]
+
+        success_old = self._run_command_realtime(upload_cmd_old, log_prefix="Uploading with old bootloader")
+
+        if success_old:
+            self.log("Upload successful with old bootloader!")
+            return True, "Upload OK (old bootloader)."
+        else:
+            self.log("ERROR: Upload failed on all attempts! Check logs above.")
+            return False, "Upload FAIL."
+
+    def _read_from_serial(self, port, baud_rate):
+        """Reads a single line from the specified serial port."""
+        self.log(f"Attempting to read from {port} at {baud_rate} baud...")
+        try:
+            with serial.Serial(port, int(baud_rate), timeout=2.0) as sp:
+                time.sleep(2)  # Wait for the board to reset
+                sp.reset_input_buffer()
+                line = sp.readline().decode('utf-8').strip()
+                if line:
+                    self.log(f"Data received: {line}")
+                    return line
+                else:
+                    self.log("Warning: No data received from serial port.")
+                    return "No data"
+        except Exception as e:
+            self.log(f"ERROR: Could not read from serial port: {e}")
+            return "Read ERROR"
+
+    def periodic_port_check(self):
+        """Periodically checks for COM port changes and refreshes the list if necessary."""
+        try:
+            # Get the list of ports currently displayed in the OptionMenu
+            menu = self.port_menu["menu"]
+            ports_in_menu = []
+            if menu.index("end") is not None:
+                ports_in_menu = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)]
+
+            # Get the actual list of ports from the system
+            current_ports = get_arduino_ports()
+
+            # If the sorted lists are different, it means a device was added or removed
+            if sorted(ports_in_menu) != sorted(current_ports):
+                self.log("Cambio de puerto detectado! Actualizando lista...")
+                self.refresh_ports()
+
+            # Schedule this function to run again after 2 seconds (2000 ms)
+            self.master.after(2000, self.periodic_port_check)
+        except Exception as e:
+            # This will prevent a crash if the window is closed while a check is pending
+            print(f"Error during periodic port check: {e}")
+
+    def _run_command_realtime(self, command, log_prefix=""):
+        """Executes a command and logs its output to the GUI in real-time."""
+        self.log(f"{log_prefix}...")
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   text=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW)
+
+        # Read the output line by line as it is generated
+        while True:
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                self.log_area.insert(tk.END, output)  # Insert directly to show raw output
+                self.log_area.see(tk.END)  # Auto-scroll
+                self.master.update_idletasks()  # Keep the GUI responsive
+
+        return process.poll() == 0  # Return True if exit code is 0 (success), else False
+
+    def open_settings_window(self):
+        # Create a new top-level window
+        settings_win = tk.Toplevel(self.master)
+        settings_win.title("Configure Paths")
+        settings_win.geometry("600x200")
+
+        # --- Variables ---
+        cli_path_var = tk.StringVar(value=str(ARDUINO_CLI_PATH))
+        log_path_var = tk.StringVar(value=str(LOG_CSV_PATH))
+
+        # --- Functions ---
+        def select_cli_path():
+            path = filedialog.askopenfilename(title="Select arduino-cli.exe")
+            if path:
+                cli_path_var.set(path)
+
+        def select_log_path():
+            path = filedialog.asksaveasfilename(title="Select Log CSV File", defaultextension=".csv",
+                                                filetypes=[("CSV files", "*.csv")])
+            if path:
+                log_path_var.set(path)
+
+        def save_paths():
+            global ARDUINO_CLI_PATH, LOG_CSV_PATH
+            ARDUINO_CLI_PATH = Path(cli_path_var.get())
+            LOG_CSV_PATH = Path(log_path_var.get())
+            # Save these paths to the main settings file
+            self.settings["arduino_cli_path"] = str(ARDUINO_CLI_PATH)
+            self.settings["log_csv_path"] = str(LOG_CSV_PATH)
+            save_settings(self.settings)
+            messagebox.showinfo("Saved", "Paths have been updated.", parent=settings_win)
+            settings_win.destroy()
+
+        # --- Widgets ---
+        tk.Label(settings_win, text="Arduino CLI Path:").pack(pady=(10, 0))
+        cli_frame = tk.Frame(settings_win)
+        cli_frame.pack(fill=tk.X, padx=10)
+        tk.Entry(cli_frame, textvariable=cli_path_var).pack(side=tk.LEFT, expand=True, fill=tk.X)
+        tk.Button(cli_frame, text="Browse...", command=select_cli_path).pack(side=tk.RIGHT)
+
+        tk.Label(settings_win, text="Log CSV Path:").pack(pady=(10, 0))
+        log_frame_settings = tk.Frame(settings_win)
+        log_frame_settings.pack(fill=tk.X, padx=10)
+        tk.Entry(log_frame_settings, textvariable=log_path_var).pack(side=tk.LEFT, expand=True, fill=tk.X)
+        tk.Button(log_frame_settings, text="Browse...", command=select_log_path).pack(side=tk.RIGHT)
+
+        tk.Button(settings_win, text="Save and Close", command=save_paths).pack(pady=15)
 
 if __name__ == "__main__":
     if not ARDUINO_CLI_PATH.exists():
