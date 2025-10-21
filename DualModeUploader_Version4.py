@@ -29,16 +29,46 @@ def get_base_path():
         # If run as a script, the base path is the script's directory
         return Path(__file__).parent
 
+# --- Settings Management ---
+def load_settings():
+    """Loads last-used settings from a JSON file."""
+    if SETTINGS_FILE.exists():
+        try:
+            with open(SETTINGS_FILE, "r") as f: return json.load(f)
+        except json.JSONDecodeError: return {}
+    return {}
+
+def save_settings(settings):
+    """Saves settings to the JSON file."""
+    with open(SETTINGS_FILE, "w") as f: json.dump(settings, f, indent=4)
+
 # Define the base path
-BASE_PATH = get_base_path()
+#BASE_PATH = get_base_path()
+
+#DEFAULT_FQBN = "arduino:avr:nano"
+#SETTINGS_FILE = Path.home() / "dual_uploader_settings.json"
+# Update ARDUINO_CLI_PATH to be relative to the base path
+#ARDUINO_CLI_PATH = BASE_PATH / "arduino-cli" / "arduino-cli.exe"
+#LOG_CSV_PATH = Path.home() / "upload_log.csv"
+
+# ... (después de BASE_PATH = get_base_path())
 
 DEFAULT_FQBN = "arduino:avr:nano"
 SETTINGS_FILE = Path.home() / "dual_uploader_settings.json"
-# Update ARDUINO_CLI_PATH to be relative to the base path
-ARDUINO_CLI_PATH = Path.home() / "arduino-cli" / "arduino-cli.exe"
-LOG_CSV_PATH = Path.home() / "upload_log.csv"
 
-# ... the rest of your script continues here
+# Cargar settings primero
+settings = load_settings()
+
+# Definir BASE_PATH antes de usarlo
+BASE_PATH = get_base_path()
+
+# Definir rutas por defecto
+default_cli_path = BASE_PATH / "arduino-cli" / "arduino-cli.exe"
+default_log_path = Path.home() / "upload_log.csv"
+
+# Usar rutas de settings si existen, si no, usar las de por defecto
+ARDUINO_CLI_PATH = Path(settings.get("arduino_cli_path", default_cli_path))
+LOG_CSV_PATH = Path(settings.get("log_csv_path", default_log_path))
 
 # --- Settings Management ---
 def load_settings():
@@ -77,7 +107,7 @@ class DualModeUploaderApp:
     def __init__(self, master):
         self.master = master
         master.title("Dual-Mode Arduino Uploader")
-        master.geometry("750x650")
+        master.geometry("632x650")
 
         # --- Load Settings ---
         self.settings = load_settings()
@@ -100,12 +130,32 @@ class DualModeUploaderApp:
         # --- Quick Upload Widgets ---
         tk.Label(quick_frame, text="Default Sketch Path:").grid(row=0, column=0, sticky="w")
         tk.Label(quick_frame, textvariable=self.default_sketch_path_var, fg="blue", wraplength=500, justify=tk.LEFT).grid(row=1, column=0, columnspan=3, sticky="w")
-
         tk.Button(quick_frame, text="Set/Change Default Sketch", command=self.set_default_sketch).grid(row=1, column=3, padx=10, sticky="e")
 
         tk.Label(quick_frame, text="COM Port:").grid(row=2, column=0, sticky="w", pady=(10, 0))
         self.port_menu = tk.OptionMenu(quick_frame, self.port_var, "No ports")
-        self.port_menu.grid(row=3, column=0, sticky="ew")
+        self.port_menu.grid(row=3, column=0, sticky="ew", padx=(0, 10))
+
+        # --- Quick Upload Widgets ---
+        tk.Label(quick_frame, text="Default Sketch Path:").grid(row=0, column=0, columnspan=4, sticky="w")
+        tk.Label(quick_frame, textvariable=self.default_sketch_path_var, fg="blue", wraplength=500, justify=tk.LEFT).grid(row=1, column=0, columnspan=3, sticky="w")
+        tk.Button(quick_frame, text="Set/Change Default Sketch", command=self.set_default_sketch).grid(row=1, column=3, padx=10, sticky="e")
+
+        # Fila 2: Etiquetas de Puerto y Baud Rate
+        tk.Label(quick_frame, text="COM Port:").grid(row=2, column=0, sticky="w", pady=(10, 0))
+        tk.Label(quick_frame, text="Baud Rate:").grid(row=2, column=1, sticky="w", padx=10, pady=(10, 0))
+
+        # Fila 3: Menú de Puerto, Campo de Baud Rate y Botón de Refrescar
+        self.port_menu = tk.OptionMenu(quick_frame, self.port_var, "No ports")
+        self.port_menu.grid(row=3, column=0, sticky="ew", padx=(0, 10))
+        
+        # Fila 4: Botón principal de Upload
+        self.quick_upload_button = tk.Button(quick_frame, text="Upload Color Sensor Sketch", command=lambda: self.start_upload_thread(use_default=True), bg="#4CAF50", fg="white", font=("Arial", 10, "bold"), height=2)
+        self.quick_upload_button.grid(row=4, column=0, columnspan=4, pady=15, sticky="ew")
+
+        #tk.Label(quick_frame, text="COM Port:").grid(row=2, column=0, sticky="w", pady=(10, 0))
+        #self.port_menu = tk.OptionMenu(quick_frame, self.port_var, "No ports")
+        #self.port_menu.grid(row=3, column=0, sticky="ew")
 
         tk.Label(quick_frame, text="Baud Rate:").grid(row=3, column=1, sticky="w", padx=10, pady=(10, 0))
         tk.Entry(quick_frame, textvariable=self.baud_rate_var).grid(row=4, column=1, sticky="ew", padx=10)
@@ -127,10 +177,24 @@ class DualModeUploaderApp:
         self.custom_upload_button.grid(row=2, column=0, columnspan=2, pady=10, sticky="ew")
 
         # --- Log Frame ---
+        # Frame para botones del log
+        log_button_frame = tk.Frame(log_frame)
+        log_button_frame.pack(fill=tk.X)
+        
+        tk.Label(log_button_frame, text="").pack(side=tk.LEFT, expand=True) # Spacer
+        tk.Button(log_button_frame, text="Config Paths...", command=self.open_settings_window).pack(side=tk.RIGHT, pady=(0, 5))
+
         self.log_area = scrolledtext.ScrolledText(log_frame, wrap=tk.WORD, height=10)
         self.log_area.pack(fill=tk.BOTH, expand=True)
+        #self.log_area = scrolledtext.ScrolledText(log_frame, wrap=tk.WORD, height=10)
+        #self.log_area.pack(fill=tk.BOTH, expand=True)
 
+        #self.refresh_ports()
+        #master.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+# ... (al final de __init__)
         self.refresh_ports()
+        self.periodic_port_check() # <--- AÑADE ESTA LÍNEA
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def on_closing(self):
@@ -191,7 +255,7 @@ class DualModeUploaderApp:
         port = self.port_var.get()
         baud_rate = self.baud_rate_var.get()
         sketch_name = Path(sketch_path).name
-
+        
         # --- 0. Validación ---
         if "No ports" in port or not baud_rate.isdigit():
             self.log("ERROR: El puerto y el Baud Rate deben estar configurados.")
@@ -203,33 +267,31 @@ class DualModeUploaderApp:
         self.custom_upload_button.config(state=tk.DISABLED)
 
         # --- 1. Compilar ---
-        # Llama a la función que usa Popen (no bloqueante)
         compile_ok, compile_details = self._compile_sketch(sketch_path)
-
+        
         upload_ok = False
         upload_details = "N/A"
         read_value = "N/A"
 
         # --- 2. Subir (solo si la compilación fue exitosa) ---
         if compile_ok:
-            # Llama a la función que usa Popen (no bloqueante)
             upload_ok, upload_details = self._upload_sketch(sketch_path, port)
         else:
             upload_details = "Carga omitida debido a fallo de compilación."
-
+            
         # --- 3. Leer Valor (solo si la subida fue exitosa) ---
         if upload_ok:
             read_value = self._read_from_serial(port, baud_rate)
-
+        
         # --- 4. Registrar en CSV ---
         log_to_csv([
             time.strftime('%Y-%m-%d %H:%M:%S'), port, sketch_name,
             "SUCCESS" if upload_ok else "FAIL", read_value,
             f"{compile_details} | {upload_details}".replace("\r", " ").replace("\n", " ")
         ])
-
+        
         self.log(f"Proceso finalizado. Resultados registrados en {LOG_CSV_PATH.name}")
-
+        
         # Habilitar botones
         self.quick_upload_button.config(state=tk.NORMAL)
         self.custom_upload_button.config(state=tk.NORMAL)
