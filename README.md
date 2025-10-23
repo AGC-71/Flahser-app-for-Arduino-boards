@@ -30,7 +30,7 @@ Estas son las "cajas de herramientas" que tu programa utiliza:
 
 ---
 
-### 3. Configuración y Gestión de Ajustes (Settings) ⚙️
+### 3. Configuración y Gestión de Ajustes (Settings) 
 
 Esta sección es muy inteligente y clave para que tu app sea "portable" (funcione en otras PCs).
 
@@ -49,7 +49,7 @@ Esta sección es muy inteligente y clave para que tu app sea "portable" (funcion
 
 ---
 
-### 4. Funciones de Backend (Las "Obreras") 🛠️
+### 4. Funciones de Backend (Las "Obreras") 
 
 Estas son funciones que hacen trabajo pero no son parte de la GUI.
 
@@ -58,7 +58,7 @@ Estas son funciones que hacen trabajo pero no son parte de la GUI.
 
 ---
 
-### 5. La Clase Principal: `DualModeUploaderApp` 🖥️
+### 5. La Clase Principal: `DualModeUploaderApp` 
 
 Esta clase es tu aplicación completa.
 
@@ -85,7 +85,7 @@ La "función de limpieza". Antes de cerrar, toma los valores actuales de la GUI 
 * **`refresh_ports(self)`**: El trabajo pesado de actualizar el menú desplegable. Borra la lista vieja, obtiene la nueva lista de `get_arduino_ports()`, y vuelve a llenar el menú. Inteligentemente, intenta mantener seleccionado el puerto que estaba antes, si es que sigue existiendo.
 * **`periodic_port_check(self)`**: El "guardia". Cada 2 segundos, compara la lista de puertos *del sistema* con la lista de puertos *en el menú*. Si no coinciden (alguien conectó o desconectó algo), llama a `refresh_ports()` para actualizar la GUI.
 
-#### El Proceso de Carga (El Corazón de la App) ❤️
+#### El Proceso de Carga (El Corazón de la App) 
 Este es el flujo más complejo, dividido en varias funciones:
 
 1.  **`start_upload_thread(self, ...)`** (El "Gerente")
