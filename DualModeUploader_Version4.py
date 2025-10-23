@@ -181,6 +181,7 @@ class DualModeUploaderApp:
         # Frame para botones del log
         log_button_frame = tk.Frame(log_frame)
         log_button_frame.pack(fill=tk.X)
+        tk.Button(log_button_frame, text="About", command=self.show_about_dialog).pack(side=tk.LEFT, pady=(0, 5), padx=(5,0))
 
         tk.Label(log_button_frame, text="").pack(side=tk.LEFT, expand=True) # Spacer
         tk.Button(log_button_frame, text="Config Paths...", command=self.open_settings_window).pack(side=tk.RIGHT, pady=(0, 5))
@@ -194,7 +195,7 @@ class DualModeUploaderApp:
 
         # Botón para abrir el CSV
         tk.Label(log_button_frame, text="").pack(side=tk.LEFT, expand=True) # Spacer
-        tk.Button(log_button_frame, text="Ver Log (.csv)", command=self.open_log_file).pack(side=tk.RIGHT, pady=(0, 5))
+        tk.Button(log_button_frame, text="Ver Log (.csv)", command=self.open_log_file).pack(side=tk.LEFT, pady=(0, 5))
         
         # Botón que ya tenías
         #tk.Button(log_button_frame, text="Config Paths...", command=self.open_settings_window).pack(side=tk.RIGHT, pady=(0, 5))
@@ -207,8 +208,7 @@ class DualModeUploaderApp:
         #self.refresh_ports()
         #master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        tk.Button(log_button_frame, text="Limpiar Log", command=self.clear_log_display).pack(side=tk.LEFT, pady=(0, 5), padx=(5,0))
-        tk.Button(log_button_frame, text="About", command=self.show_about_dialog).pack(side=tk.LEFT, pady=(0, 5), padx=(5,0))
+        tk.Button(log_button_frame, text="Limpiar Log", command=self.clear_log_display).pack(side=tk.LEFT, pady=(0, 5))        
 
 # ... (al final de __init__)
         self.refresh_ports()
@@ -498,7 +498,7 @@ class DualModeUploaderApp:
         """Displays an About dialog with version and author information."""
         messagebox.showinfo(
             "About Dual-Mode Arduino Uploader",
-            "Dual-Mode Arduino Uploader\nVersion 4.0\nAuthor: Your Name\n\nUpload sketches to Arduino Nano/Uno boards easily.\n© 2024"
+            "Dual-Mode Arduino Uploader\nVersion 1.4.1\nAuthor: Diego Gallegos\nLocation: CME Department\n\nUpload sketches to Arduino Nano/Uno boards easily.\n© 2024"
         )
 
 if __name__ == "__main__":
