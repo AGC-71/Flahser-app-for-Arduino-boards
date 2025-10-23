@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 import time
+import os
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, filedialog, scrolledtext
@@ -99,7 +100,7 @@ def log_to_csv(data_row):
     with open(LOG_CSV_PATH, 'a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(["Timestamp", "Port", "Sketch", "UploadStatus", "ValueRead", "Details"])
+            writer.writerow([" Timestamp ", " Port ", " Sketch ", " UploadStatus ", " ValueRead ", " Details "])
         writer.writerow(data_row)
 
 # --- Main GUI Application ---
@@ -148,7 +149,7 @@ class DualModeUploaderApp:
         # Fila 3: Menú de Puerto, Campo de Baud Rate y Botón de Refrescar
         self.port_menu = tk.OptionMenu(quick_frame, self.port_var, "No ports")
         self.port_menu.grid(row=3, column=0, sticky="ew", padx=(0, 10))
-        
+
         # Fila 4: Botón principal de Upload
         self.quick_upload_button = tk.Button(quick_frame, text="Upload Color Sensor Sketch", command=lambda: self.start_upload_thread(use_default=True), bg="#4CAF50", fg="white", font=("Arial", 10, "bold"), height=2)
         self.quick_upload_button.grid(row=4, column=0, columnspan=4, pady=15, sticky="ew")
@@ -180,17 +181,34 @@ class DualModeUploaderApp:
         # Frame para botones del log
         log_button_frame = tk.Frame(log_frame)
         log_button_frame.pack(fill=tk.X)
-        
+
         tk.Label(log_button_frame, text="").pack(side=tk.LEFT, expand=True) # Spacer
         tk.Button(log_button_frame, text="Config Paths...", command=self.open_settings_window).pack(side=tk.RIGHT, pady=(0, 5))
 
         self.log_area = scrolledtext.ScrolledText(log_frame, wrap=tk.WORD, height=10)
         self.log_area.pack(fill=tk.BOTH, expand=True)
+
+        # Frame para botones del log
+        #log_button_frame = tk.Frame(log_frame)
+        #log_button_frame.pack(fill=tk.X)
+
+        # Botón para abrir el CSV
+        tk.Label(log_button_frame, text="").pack(side=tk.LEFT, expand=True) # Spacer
+        tk.Button(log_button_frame, text="Ver Log (.csv)", command=self.open_log_file).pack(side=tk.RIGHT, pady=(0, 5))
+        
+        # Botón que ya tenías
+        #tk.Button(log_button_frame, text="Config Paths...", command=self.open_settings_window).pack(side=tk.RIGHT, pady=(0, 5))
+        #self.log_area = scrolledtext.ScrolledText(log_frame, wrap=tk.WORD, height=10)
+        #self.log_area.pack(fill=tk.BOTH, expand=True)
+
         #self.log_area = scrolledtext.ScrolledText(log_frame, wrap=tk.WORD, height=10)
         #self.log_area.pack(fill=tk.BOTH, expand=True)
 
         #self.refresh_ports()
         #master.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+        tk.Button(log_button_frame, text="Limpiar Log", command=self.clear_log_display).pack(side=tk.LEFT, pady=(0, 5), padx=(5,0))
+        tk.Button(log_button_frame, text="About", command=self.show_about_dialog).pack(side=tk.LEFT, pady=(0, 5), padx=(5,0))
 
 # ... (al final de __init__)
         self.refresh_ports()
@@ -289,6 +307,15 @@ class DualModeUploaderApp:
             "SUCCESS" if upload_ok else "FAIL", read_value,
             f"{compile_details} | {upload_details}".replace("\r", " ").replace("\n", " ")
         ])
+
+        # --- 4. Registrar en CSV ---
+        #current_date = time.strftime('%Y-%m-%d')
+        #current_time = time.strftime('%H:%M:%S')
+        #log_to_csv([
+        #    current_date, current_time, port, sketch_name,
+        #    "SUCCESS" if upload_ok else "FAIL", read_value,
+        #    f"{compile_details} | {upload_details}".replace("\r", " ").replace("\n", " ")
+        #])
         
         self.log(f"Proceso finalizado. Resultados registrados en {LOG_CSV_PATH.name}")
         
@@ -400,11 +427,12 @@ class DualModeUploaderApp:
         # Create a new top-level window
         settings_win = tk.Toplevel(self.master)
         settings_win.title("Configure Paths")
-        settings_win.geometry("600x200")
+        settings_win.geometry("550x250")
 
         # --- Variables ---
         cli_path_var = tk.StringVar(value=str(ARDUINO_CLI_PATH))
         log_path_var = tk.StringVar(value=str(LOG_CSV_PATH))
+        fqbn_var = tk.StringVar(value=self.fqbn_var.get()) # <-- Añadir esta
 
         # --- Functions ---
         def select_cli_path():
@@ -425,9 +453,11 @@ class DualModeUploaderApp:
             # Save these paths to the main settings file
             self.settings["arduino_cli_path"] = str(ARDUINO_CLI_PATH)
             self.settings["log_csv_path"] = str(LOG_CSV_PATH)
-            save_settings(self.settings)
+            self.fqbn_var.set(fqbn_var.get()) 
+            self.settings["fqbn"] = self.fqbn_var.get() 
             messagebox.showinfo("Saved", "Paths have been updated.", parent=settings_win)
             settings_win.destroy()
+            save_settings(self.settings)
 
         # --- Widgets ---
         tk.Label(settings_win, text="Arduino CLI Path:").pack(pady=(10, 0))
@@ -442,7 +472,34 @@ class DualModeUploaderApp:
         tk.Entry(log_frame_settings, textvariable=log_path_var).pack(side=tk.LEFT, expand=True, fill=tk.X)
         tk.Button(log_frame_settings, text="Browse...", command=select_log_path).pack(side=tk.RIGHT)
 
+        tk.Label(settings_win, text="Default FQBN (Tipo de Placa):").pack(pady=(10, 0))
+        tk.Label(settings_win, text="(ej: arduino:avr:nano, arduino:avr:uno)").pack(pady=(0, 0))
+        tk.Entry(settings_win, textvariable=fqbn_var).pack(fill=tk.X, padx=10)
+
         tk.Button(settings_win, text="Save and Close", command=save_paths).pack(pady=15)
+        
+    def open_log_file(self):
+        """Abre el archivo de log CSV con la aplicación por defecto."""
+        if LOG_CSV_PATH.exists():
+            self.log(f"Abriendo archivo de log: {LOG_CSV_PATH}")
+            try:
+                os.startfile(LOG_CSV_PATH) # Para Windows
+            except AttributeError:
+                subprocess.run(['open', LOG_CSV_PATH]) # Para macOS
+        else:
+            self.log("El archivo de log aún no existe.")
+            messagebox.showinfo("Info", "El archivo de log no existe. Sube un sketch para crearlo.")
+
+    def clear_log_display(self):
+        """Borra el texto del área de log en la GUI."""
+        self.log_area.delete('1.0', tk.END)
+
+    def show_about_dialog(self):
+        """Displays an About dialog with version and author information."""
+        messagebox.showinfo(
+            "About Dual-Mode Arduino Uploader",
+            "Dual-Mode Arduino Uploader\nVersion 4.0\nAuthor: Your Name\n\nUpload sketches to Arduino Nano/Uno boards easily.\n© 2024"
+        )
 
 if __name__ == "__main__":
     if not ARDUINO_CLI_PATH.exists():
