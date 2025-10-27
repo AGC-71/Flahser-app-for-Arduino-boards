@@ -78,7 +78,7 @@ def load_settings():
         try:
             with open(SETTINGS_FILE, "r") as f: return json.load(f)
         except json.JSONDecodeError: return {}
-    return {}
+/    return {}
 
 def save_settings(settings):
     """Saves settings to the JSON file."""
